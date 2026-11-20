@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ask away or (spare me the horror and leave please-)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #111;
+      color: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+    .app {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.02em; }
+    form { display: flex; gap: 8px; }
+    input {
+      flex: 1;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #1c1c1c;
+      color: #fff;
+      font-size: 1rem;
+    }
+    button {
+      padding: 12px 18px;
+      border-radius: 8px;
+      border: none;
+      background: #ff3b5c;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .feed { display: flex; flex-direction: column; gap: 12px; }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2b2b2b;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .q { font-weight: 600; color: #9ecbff; margin-bottom: 8px; }
+    .meme-box {
+      background: #26141a;
+      border-left: 4px solid #ff3b5c;
+      padding: 10px 12px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .meme-box.nalayak {
+      background: #2b1d0e;
+      border-left-color: #ff9f1c;
+    }
+    .meme-box.gali {
+      background: #330b0b;
+      border-left-color: #ff1e1e;
+    }
+    .meme-tag {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #ff758f;
+      font-weight: 700;
+    }
+    .meme-box.nalayak .meme-tag { color: #ffbf69; }
+    .meme-box.gali .meme-tag { color: #ff6b6b; }
+    .meme-line { font-size: 1.15rem; font-weight: 800; margin-top: 2px; }
+    .answer { line-height: 1.5; color: #e6e6e6; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>ask away or (spare me the horror and leave please-)</h1>
+
+    <form id="ask-form">
+      <input id="question-input" type="text" placeholder="Ask something..." required />
+      <button id="ask-btn" type="submit">Ask</button>
+    </form>
+
+    <div id="feed" class="feed"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById("ask-form");
+    const input = document.getElementById("question-input");
+    const btn = document.getElementById("ask-btn");
+    const feed = document.getElementById("feed");
+
+    const audioClips = {
+      normal: new Audio("cunk.mp3"),
+      stupid: new Audio("nalayak.mp3"),
+      gali: new Audio("bhosrike.mp3")
+    };
+
+    function playClip(audioObj, onFinish) {
+      audioObj.currentTime = 0;
+      audioObj.onended = onFinish;
+      audioObj.play().catch(() => setTimeout(onFinish, 1500));
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (!q) return;
+
+      btn.disabled = true;
+      input.value = "";
+
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <div class="q">Q: ${escapeHtml(q)}</div>
+        <div class="meme-box" id="reaction-box">
+          <div class="meme-tag">Judging your question...</div>
+          <div class="meme-line">...</div>
+        </div>
+        <div class="answer"><em>Thinking...</em></div>
+      `;
+      feed.prepend(card);
+
+      const reactionBox = card.querySelector("#reaction-box");
+      const answerEl = card.querySelector(".answer");
+
+      try {
+        const response = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Request failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.reaction === "gali") {
+          reactionBox.classList.add("gali");
+          reactionBox.innerHTML = `
+            <div class="meme-tag">Gali Detected</div>
+            <div class="meme-line">"Bhosrike!"</div>
+          `;
+          playClip(audioClips.gali, () => {
+            answerEl.textContent = data.answer;
+            btn.disabled = false;
+            input.focus();
+          });
+        } else if (data.reaction === "stupid") {
+          reactionBox.classList.add("nalayak");
+          reactionBox.innerHTML = `
+            <div class="meme-tag">Stupid Question Detected</div>
+            <div class="meme-line">"Nalayak!"</div>
+          `;
+          playClip(audioClips.stupid, () => {
+            answerEl.textContent = data.answer;
+            btn.disabled = false;
+            input.focus();
+          });
+        } else {
+          reactionBox.innerHTML = `
+            <div class="meme-tag">Philomena Cunk Reaction</div>
+            <div class="meme-line">"What the f*** is this?"</div>
+          `;
+          playClip(audioClips.normal, () => {
+            answerEl.textContent = data.answer;
+            btn.disabled = false;
+            input.focus();
+          });
+        }
+      } catch (err) {
+        reactionBox.innerHTML = `
+          <div class="meme-tag">Connection Error</div>
+          <div class="meme-line">Backend offline</div>
+        `;
+        answerEl.textContent = "Run 'python app.py' in your VS Code terminal first.";
+        btn.disabled = false;
+      }
+    });
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, (m) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[m]));
+    }
+  </script>
+</body>
+</html>
